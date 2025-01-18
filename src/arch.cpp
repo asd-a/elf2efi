@@ -230,7 +230,7 @@ static void elf2efi(const config &cfg, DataIter &&data) {
     if (!has_dynamic) {
         err(1, "ELF file has no dynamic segment.\n");
     }
-    std::ofstream pe(cfg.out, ios::binary | ios::out);
+    std::ofstream pe(cfg.outfile, ios::binary | ios::out);
     if (!pe) {
         err(1, "Failed to open PE file.\n");
     }
@@ -373,7 +373,7 @@ static void elf2efi(const config &cfg, DataIter &&data) {
                     sizeof(EFI_IMAGE_SECTION_HEADER) * sections.size())) {
         err(1, "Failed to write to PE headers.\n");
     }
-    if (truncate(cfg.out.c_str(), section_offset)) {
+    if (truncate(cfg.outfile.c_str(), section_offset)) {
         err(1, "Failed to write to PE file.\n");
     }
     log("Finished.\n");

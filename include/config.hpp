@@ -18,6 +18,15 @@ SPDX-License-Identifier: BSD-3-Clause
 #error "Not little endian"
 #endif
 
+#if !defined(RELEASE)
+[[noreturn]]
+#else
+[[deprecated("Uncompleted todo in RELEASE version")]]
+#endif
+static inline void todo() {
+    std::exit(2);
+}
+
 static_assert(sizeof(std::int8_t) == 1, "sizeof(std::int8_t) != 1");
 static_assert(sizeof(std::uint8_t) == 1, "sizeof(std::uint8_t) != 1");
 static_assert(alignof(std::int8_t) == 1, "alignof(std::int8_t) != 1");
@@ -36,8 +45,8 @@ static_assert(alignof(std::int64_t) == 8, "alignof(std::int64_t) != 8");
 static_assert(alignof(std::uint64_t) == 8, "alignof(std::uint64_t) != 8");
 
 struct config {
-    std::string in, out; //, copy;
-    std::uint16_t subsystem, version_major, version_minor, efi_major, efi_minor;
+    std::string infile, outfile; //, copy;
+    std::uint16_t subsystem;
     // std::size_t minimum_sections;
 };
 #define SECTION_ALIGNMENT 0x1000 // 4096
@@ -56,8 +65,6 @@ struct config {
 #define ALIGN_TO(x, y) (((x) + ((y) - 1)) & (~((y) - 1)))
 
 #define ALIGN_DOWN(x, y) ((x) & (~((y) - 1)))
-
-extern config parse_args(int argc, char *const argv[]);
 
 #include <format>
 #include <iostream>

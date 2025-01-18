@@ -6,8 +6,8 @@
 override CC:=clang
 override LD:=clang
 override CXX:=clang -xc++
-override CXXFLAGS:=-std=c++20  -Iinclude -O3 -Werror -Wall -EL -stdlib=libc++
-override LDFLAGS:=-fuse-ld=lld -O3 -Wl,-EL -Werror -Wall -lc++
+override CXXFLAGS:=-std=c++20  -Iinclude -Og -Werror -Wall -EL -stdlib=libc++
+override LDFLAGS:=-fuse-ld=lld -Og -Wl,-EL -Werror -Wall -lc++
 override HEADERS:= $(wildcard include/*.h) $(wildcard include/*.hpp)
 
 BUILDDIR := build
@@ -19,7 +19,7 @@ endif
 
 .PHONY: all clean
 
-OBJ:=parse.o elf2efi.o
+OBJ:=elf2efi.o
 
 OBJ:=$(foreach var,$(OBJ),$(BUILDDIR)/$(var))
 
