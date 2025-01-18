@@ -3,4 +3,4 @@ InlayHints:
 Hover:
   ShowAKA: Yes
 CompileFlags:
-  CompilationDatabase: ./build
+  CompilationDatabase: build
