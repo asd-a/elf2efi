@@ -78,7 +78,7 @@ static inline config parse_args(int argc, char *const argv[]) {
     auto format_integral = [](const char *str, auto &value, const char *name) {
         auto [ptr, ec] = std::from_chars(str, str + std::strlen(str), value, 0);
         if (*ptr != '\0' || ec != std::errc{}) {
-            err(1, "Invalid {}:{}\n", name, str);
+            err(ERR_CMD, "Invalid {}:{}\n", name, str);
         }
     };
     config cfg{};
@@ -101,7 +101,7 @@ static inline config parse_args(int argc, char *const argv[]) {
                 default:
                     log("Unknown argument: {}\n", argv[ind]);
                     opts.print_help(std::cerr);
-                    exit(1);
+                    exit(ERR_CMD);
             }
         } else {
             // others
@@ -111,12 +111,12 @@ static inline config parse_args(int argc, char *const argv[]) {
     if (others.size() > 2) {
         log("Too many arguments.\n");
         opts.print_help(std::cerr);
-        exit(1);
+        exit(ERR_CMD);
     }
     if (others.size() < 2) {
         log("Too few arguments.\n");
         opts.print_help(std::cerr);
-        exit(1);
+        exit(ERR_CMD);
     }
     cfg.infile = others.front();
     cfg.outfile = others.back();
@@ -128,23 +128,23 @@ int main(int argc, char *const argv[]) {
     struct stat state;
     int fd = open(cfg.infile.c_str(), O_RDONLY);
     if (fd == -1) {
-        err(1, "Failed to open ELF file \"{}\".\n", cfg.infile);
+        err(ERR_SYS, "Failed to open ELF file \"{}\".\n", cfg.infile);
     }
     if (fstat(fd, &state) == -1) {
-        err(1, "Failed to open ELF file \"{}\".\n", cfg.infile);
+        err(ERR_SYS, "Failed to open ELF file \"{}\".\n", cfg.infile);
     }
     auto raw = mmap(NULL, state.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     if (raw == MAP_FAILED) {
-        err(1, "Failed to open ELF file \"{}\".\n", cfg.infile);
+        err(ERR_SYS, "Failed to open ELF file \"{}\".\n", cfg.infile);
     }
     auto data = DataIter(raw);
     const char *e_ident = data;
     if (e_ident[EI_MAG0] != ELFMAG0 || e_ident[EI_MAG1] != ELFMAG1 ||
         e_ident[EI_MAG2] != ELFMAG2 || e_ident[EI_MAG3] != ELFMAG3) {
-        err(1, "Invalid ELF file.\n");
+        err(ERR_INPUT, "Invalid ELF file.\n");
     }
     if (e_ident[EI_CLASS] != ELFCLASS32 && e_ident[EI_CLASS] != ELFCLASS64) {
-        err(1, "Invalid ELF class ({}).\n", e_ident[EI_CLASS]);
+        err(ERR_INPUT, "Invalid ELF class: {}\n", e_ident[EI_CLASS]);
     }
     e_ident[EI_CLASS] == ELFCLASS32 ? elf2efi32(cfg, std::move(data))
                                     : elf2efi64(cfg, std::move(data));

@@ -66,6 +66,11 @@ struct config {
 
 #define ALIGN_DOWN(x, y) ((x) & (~((y) - 1)))
 
+#define ERR_CMD 1   // command line error
+#define ERR_SYS 2   // system error
+#define ERR_INPUT 4 // invalid elf file input
+#define ERR_UNSUP 8 // unsupported
+
 #include <format>
 #include <iostream>
 #include <string>
