@@ -5,7 +5,7 @@ SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 
-#include <elf.h>
+#include <elf-local.h>
 #include <pe.h>
 
 #define ELF_R_SYM ELF32_R_SYM
