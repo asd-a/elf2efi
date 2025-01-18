@@ -1,0 +1,14 @@
+{
+    "files.exclude": {
+        "build/.cache/*": true
+    },
+    "search.exclude": {
+        "build/*": true
+    },
+    "mesonbuild.buildFolder": "build",
+    "mesonbuild.configureOnOpen": true,
+    "mesonbuild.downloadLanguageServer": true,
+    "mesonbuild.formatting.enabled": true,
+    "mesonbuild.linter.muon.enabled": true,
+    "mesonbuild.modifySettings": false,
+}
