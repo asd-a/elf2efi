@@ -78,7 +78,7 @@ static inline config parse_args(int argc, char *const argv[]) {
     auto format_integral = [](const char *str, auto &value, const char *name) {
         auto [ptr, ec] = std::from_chars(str, str + std::strlen(str), value, 0);
         if (*ptr != '\0' || ec != std::errc{}) {
-            err(1, "Invalid {} {}", name, str);
+            err(1, "Invalid {}:{}\n", name, str);
         }
     };
     config cfg{};
@@ -99,7 +99,7 @@ static inline config parse_args(int argc, char *const argv[]) {
                     break;
                 }
                 default:
-                    log("Unknown argument {}", argv[ind]);
+                    log("Unknown argument: {}\n", argv[ind]);
                     opts.print_help(std::cerr);
                     exit(1);
             }
@@ -109,12 +109,12 @@ static inline config parse_args(int argc, char *const argv[]) {
         }
     }
     if (others.size() > 2) {
-        log("Too many arguments");
+        log("Too many arguments.\n");
         opts.print_help(std::cerr);
         exit(1);
     }
     if (others.size() < 2) {
-        log("Too few arguments");
+        log("Too few arguments.\n");
         opts.print_help(std::cerr);
         exit(1);
     }
