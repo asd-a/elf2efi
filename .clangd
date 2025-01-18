@@ -2,3 +2,5 @@ InlayHints:
   Enabled: No
 Hover:
   ShowAKA: Yes
+CompileFlags:
+  CompilationDatabase: ./build
