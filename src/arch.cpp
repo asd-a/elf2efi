@@ -9,6 +9,7 @@ SPDX-License-Identifier: BSD-3-Clause
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
 static void elf2efi(const config &cfg, DataIter &&data);
 #if ARCH_CLASS == 32
 #include <arch32.h>
@@ -24,7 +25,6 @@ void elf2efi64(const config &cfg, DataIter &&data) { return elf2efi(cfg, std::mo
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <unistd.h>
 #include <vector>
 
 static inline std::uint16_t pe_machine(Elf_Half e_machine) {
@@ -128,7 +128,7 @@ relocation_table(const DataIter &data, auto offset, auto base) {
     return res;
 }
 #define RELOCATION_ENTRY(x, y) (((x) << 12) | ((y) & 0xfff))
-#define TOCONSTCHARPTR(x) (reinterpret_cast<const char *>(x))
+#define TOCHARS(x) (reinterpret_cast<const char *>(x))
 struct PeRelocationBlock {
     EFI_IMAGE_BASE_RELOCATION header;
     std::vector<std::uint16_t> entries;
@@ -141,6 +141,7 @@ struct PeRelocationBlock {
 
 static void elf2efi(const config &cfg, DataIter &&data) {
     using std::vector, std::string, std::pair, std::ios, std::uint32_t, std::uint16_t;
+    namespace stdfs = std::filesystem;
     Elf_Ehdr *ehdr = data;
 
     if (ehdr->e_ident[EI_MAG0] != ELFMAG0 || ehdr->e_ident[EI_MAG1] != ELFMAG1 ||
@@ -309,8 +310,8 @@ static void elf2efi(const config &cfg, DataIter &&data) {
         for (auto &block : blocks) {
             block.update();
             if (!pe.seekp(section_offset, ios::beg)
-                     .write(TOCONSTCHARPTR(&block.header), sizeof(EFI_IMAGE_BASE_RELOCATION))
-                     .write(TOCONSTCHARPTR(block.entries.data()), block.entries.size() * 2)) {
+                     .write(TOCHARS(&block.header), sizeof(EFI_IMAGE_BASE_RELOCATION))
+                     .write(TOCHARS(block.entries.data()), block.entries.size() * 2)) {
                 err(ERR_SYS, "Failed to write to PE .reloc section at {:x}.\n", section_offset);
             }
             section_offset += block.header.SizeOfBlock;
@@ -366,14 +367,16 @@ static void elf2efi(const config &cfg, DataIter &&data) {
     };
     nthdr.OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_BASERELOC] = RelocDict;
     if (!pe.seekp(0, ios::beg)
-             .write(TOCONSTCHARPTR(&doshdr), sizeof(EFI_IMAGE_DOS_HEADER))
-             .write(TOCONSTCHARPTR(&nthdr), sizeof(EFI_IMAGE_NT_HEADER))
-             .write(TOCONSTCHARPTR(sections.data()),
+             .write(TOCHARS(&doshdr), sizeof(EFI_IMAGE_DOS_HEADER))
+             .write(TOCHARS(&nthdr), sizeof(EFI_IMAGE_NT_HEADER))
+             .write(TOCHARS(sections.data()),
                     sizeof(EFI_IMAGE_SECTION_HEADER) * sections.size())) {
         err(ERR_SYS, "Failed to write to PE headers.\n");
     }
-    if (truncate(cfg.outfile.c_str(), section_offset)) {
-        err(ERR_SYS, "Failed to write to PE file.\n");
+    try {
+        stdfs::resize_file(cfg.outfile, section_offset);
+    } catch (stdfs::filesystem_error &ec) {
+        err(ERR_SYS, "Failed to resize PE file to alignment: {}", ec.what());
     }
     log("Finished.\n");
 }
