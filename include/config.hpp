@@ -46,7 +46,8 @@ static_assert(alignof(std::uint64_t) == 8, "alignof(std::uint64_t) != 8");
 
 struct config {
     std::string inFile, outFile; //, copy;
-    std::uint16_t subsystem;
+    std::uint16_t subsystem, subsystemMajor, subsystemMinor;
+    std::uint32_t stackReserve, stackCommit, heapReserve, heapCommit;
 };
 #define SECTION_ALIGNMENT 0x1000 // 4096
 #define FILE_ALIGNMENT 0x0200    // 512

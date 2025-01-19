@@ -6,11 +6,15 @@ SPDX-License-Identifier: BSD-3-Clause
 #include <cctype>
 #include <charconv>
 #include <config.hpp>
+#include <cstddef>
 #include <cstring>
 #include <elf2efi.hpp>
 #include <fcntl.h>
 #include <format>
+#include <functional>
 #include <iostream>
+#include <optional>
+#include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <system_error>
@@ -26,125 +30,202 @@ struct ArgOptions {
     const char *description;
 
     struct ArgOption {
-        int type;
-        const char *name;
+        char short_name;
+        const char *long_name;
         const char *description;
         const char *addons;
         inline bool check(const char *argv) const {
-            if (31 < type && type < 127 && std::isprint((char)type)) {
-                if (argv[0] == '-' && argv[1] == type && argv[2] == '\0') {
-                    return true;
-                }
-            }
-            return argv[0] == '-' && argv[1] == '-' && std::strcmp(name, argv + 2) == 0;
+            if (short_name != 0 && argv[0] == '-' && argv[1] == short_name && argv[2] == '\0')
+                return true;
+            return argv[0] == '-' && argv[1] == '-' && std::strcmp(long_name, argv + 2) == 0;
         }
-    } opts[];
+        std::function<std::optional<std::string>()> formatter;
+        inline void format() const {
+            if (auto _ = formatter()) {
+                err(ERR_CMD, "Invalid {}: {}.", long_name, *_);
+            }
+        }
+    };
+    std::vector<ArgOption> opts;
 
     inline void print_help(std::ostream &out) const {
         out << std::format(
-            "Usage: {} [OPTIONS] {}\n\n"
-            "Description: {}\n\n"
+            "Usage: {} [OPTIONS] {}\n\v"
+            "Description:\n{}\n\v"
             "Options:\n",
             name,
             addons,
             description);
-        for (auto opt = opts; opt->type != 0; ++opt) {
+        for (const auto &opt : opts) {
             std::string _ = "    ";
-            if (31 < opt->type && opt->type < 127 && std::isprint((char)opt->type)) {
-                _ = std::format("-{}, ", (char)opt->type);
+            if (opt.short_name != 0) {
+                _ = std::format("-{}, ", opt.short_name);
             }
-            _ = std::format("  {}--{} {}", _, opt->name, opt->addons);
-            out << std::format("{:<32} \t {}\n", _, opt->description);
+            _ = std::format("  {}--{} {}", _, opt.long_name, opt.addons);
+            if (_.size() > 20)
+                out << std::format("{}\n{:<30}\t{}\n", _, "", opt.description);
+            else
+                out << std::format("{:<30}\t{}\n", _, opt.description);
         }
+        out.flush();
     }
-    inline auto find(const char *argv) const {
-        for (auto opt = opts;; ++opt) {
-            if (opt->type == 0 || opt->check(argv)) {
-                return opt;
-            }
-        }
+    inline auto &find(const char *argv) const {
+        for (const auto &opt : opts)
+            if (opt.check(argv)) return opt;
+        err(ERR_CMD, "Unknown argument: {}", argv);
     }
 };
-static const ArgOptions opts = {
-    .name = "elf2efi",
-    .addons = "<IN_ELF> <OUT_EFI>",
-    .description = "A tool to convert static-PIE ELF file to EFI image.",
-    .opts{{'h', "help", "Print this help message", ""},
-          {'v', "version", "Print the version info", ""},
-          {-1, "subsystem", "Specify the image subsystem", "<ID>"},
-          {}},
-};
+#define OPTSTR std::optional<std::string>
+#define NULLOPT OPTSTR(std::nullopt)
+
+template <const int base = 0>
+static inline bool format_int(const char *first, const char *last, auto &value) {
+    auto [ptr, ec] = std::from_chars(first, last, value, base);
+    return (ptr != last || ec != std::errc{});
+}
+
+template <const int base = 0>
+static inline bool format_int(const std::string &str, auto &value) {
+    auto first = str.c_str(), last = str.c_str() + str.size();
+    auto [ptr, ec] = std::from_chars(first, last, value, base);
+    return (ptr != last || ec != std::errc{});
+}
+
 static inline config parse_args(int argc, char *const argv[]) {
-    auto format_integral = [](const char *str, auto &value, const char *name) {
-        auto [ptr, ec] = std::from_chars(str, str + std::strlen(str), value, 0);
-        if (*ptr != '\0' || ec != std::errc{}) {
-            err(ERR_CMD, "Invalid {}:{}\n", name, str);
-        }
+    config cfg{
+        // default settings
+        .inFile{},
+        .outFile{},
+        .subsystem = 0,
+        .subsystemMajor = 0,
+        .subsystemMinor = 0,
+        .stackReserve = 0x100000,
+        .stackCommit = 0x1000,
+        .heapReserve = 0x100000,
+        .heapCommit = 0x1000,
     };
-    config cfg{};
+    auto ind = 1;
     using std::string, std::vector;
     vector<string> others;
-    for (auto ind = 1; ind < argc; ++ind) {
+    ArgOptions arg_opts{
+        "elf2efi",
+        "<IN_ELF> <OUT_EFI>",
+        "A tool to convert static-PIE ELF file to EFI image.",
+    };
+    arg_opts.opts = {
+        {
+            'h',
+            "help",
+            "Print this help message",
+            "",
+            [&]() -> OPTSTR {
+                arg_opts.print_help(std::cout);
+                exit(0);
+            },
+        },
+        {
+            'v',
+            "version",
+            "Print the version info",
+            "",
+            [&]() -> OPTSTR {
+                print("{} {}", arg_opts.name, version);
+                exit(0);
+            },
+        },
+        {
+            0,
+            "subsystem",
+            "Specify the image subsystem (and version)",
+            "<SUBSYSTEM_ID>[:<MAJOR>.<MINOR>]",
+            [&]() -> OPTSTR {
+                if (auto ptr = std::strchr(argv[++ind], ':')) {
+                    auto _ = std::strchr(ptr, '.');
+                    return _ == nullptr || format_int(argv[ind], ptr, cfg.subsystem) ||
+                                   format_int<10>(ptr + 1, _, cfg.subsystemMajor) ||
+                                   format_int<10>(_ + 1, cfg.subsystemMinor)
+                               ? argv[ind]
+                               : NULLOPT;
+                } else {
+                    return format_int(argv[ind], cfg.subsystem) ? argv[ind] : NULLOPT;
+                }
+            },
+        },
+        {
+            0,
+            "stack",
+            "Specify the stack reserve and commit size",
+            "<RESERVE_SIZE>[,<COMMIT_SIZE>]",
+            [&]() -> OPTSTR {
+                if (auto ptr = std::strchr(argv[++ind], ',')) {
+                    return format_int(argv[ind], ptr, cfg.stackReserve) ||
+                                   format_int(ptr + 1, cfg.stackCommit)
+                               ? argv[ind]
+                               : NULLOPT;
+                } else {
+                    return format_int(argv[ind], cfg.stackReserve) ? argv[ind] : NULLOPT;
+                }
+            },
+        },
+        {
+            0,
+            "heap",
+            "Specify the heap reserve and commit size",
+            "<RESERVE_SIZE>[,<COMMIT_SIZE>]",
+            [&]() -> OPTSTR {
+                if (auto ptr = std::strchr(argv[++ind], ',')) {
+                    return format_int(argv[ind], ptr, cfg.heapReserve) ||
+                                   format_int(ptr + 1, cfg.heapCommit)
+                               ? argv[ind]
+                               : NULLOPT;
+                } else {
+                    return format_int(argv[ind], cfg.heapReserve) ? argv[ind] : NULLOPT;
+                }
+            },
+        },
+    };
+    for (; ind < argc; ++ind) {
         if (argv[ind][0] == '-') {
             // options
-            switch (auto opt = opts.find(argv[ind]); opt->type) {
-                case 'h':
-                    opts.print_help(std::cout);
-                    exit(0);
-                case 'v':
-                    print("{} {}\n", argv[0], version);
-                    exit(0);
-                case -1: {
-                    format_integral(argv[++ind], cfg.subsystem, opt->name);
-                    break;
-                }
-                default:
-                    log("Unknown argument: {}\n", argv[ind]);
-                    opts.print_help(std::cerr);
-                    exit(ERR_CMD);
-            }
+            arg_opts.find(argv[ind]).format();
         } else {
             // others
             others.emplace_back(argv[ind]);
         }
     }
     if (others.size() > 2) {
-        log("Too many arguments.\n");
-        opts.print_help(std::cerr);
-        exit(ERR_CMD);
+        err(ERR_CMD, "Too many arguments.");
     }
     if (others.size() < 2) {
-        log("Too few arguments.\n");
-        opts.print_help(std::cerr);
-        exit(ERR_CMD);
+        err(ERR_CMD, "Too few arguments.");
     }
-    cfg.infile = others.front();
-    cfg.outfile = others.back();
+    cfg.inFile = others.front();
+    cfg.outFile = others.back();
     return cfg;
 }
 
 int main(int argc, char *const argv[]) {
     auto cfg = parse_args(argc, argv);
     struct stat state;
-    int fd = open(cfg.infile.c_str(), O_RDONLY);
+    int fd = open(cfg.inFile.c_str(), O_RDONLY);
     if (fd == -1) {
-        err(ERR_SYS, "Failed to open ELF file \"{}\".\n", cfg.infile);
+        err(ERR_SYS, "Failed to open ELF file \"{}\".", cfg.inFile);
     }
     if (fstat(fd, &state) == -1) {
-        err(ERR_SYS, "Failed to open ELF file \"{}\".\n", cfg.infile);
+        err(ERR_SYS, "Failed to open ELF file \"{}\".", cfg.inFile);
     }
-    auto raw = mmap(NULL, state.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    auto raw = mmap(nullptr, state.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     if (raw == MAP_FAILED) {
-        err(ERR_SYS, "Failed to open ELF file \"{}\".\n", cfg.infile);
+        err(ERR_SYS, "Failed to open ELF file \"{}\".", cfg.inFile);
     }
     auto data = DataIter(raw);
     const char *e_ident = data;
     if (e_ident[EI_MAG0] != ELFMAG0 || e_ident[EI_MAG1] != ELFMAG1 ||
         e_ident[EI_MAG2] != ELFMAG2 || e_ident[EI_MAG3] != ELFMAG3) {
-        err(ERR_INPUT, "Invalid ELF file.\n");
+        err(ERR_INPUT, "Invalid ELF file.");
     }
     if (e_ident[EI_CLASS] != ELFCLASS32 && e_ident[EI_CLASS] != ELFCLASS64) {
-        err(ERR_INPUT, "Invalid ELF class: {}\n", e_ident[EI_CLASS]);
+        err(ERR_INPUT, "Invalid ELF class: {}", e_ident[EI_CLASS]);
     }
     e_ident[EI_CLASS] == ELFCLASS32 ? elf2efi32(cfg, std::move(data))
                                     : elf2efi64(cfg, std::move(data));
