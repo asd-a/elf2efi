@@ -6,4 +6,4 @@ This is a tool for converting static-pie ELF to EFI image.
 - [ ] change to `meson` build system
 - [ ] add github workflow
 - [ ] full document
-- [ ] prettier args parsing
+- [x] prettier args parsing
