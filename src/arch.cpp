@@ -6,7 +6,6 @@ SPDX-License-Identifier: BSD-3-Clause
 #include <config.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -42,7 +41,7 @@ static inline std::uint16_t pe_machine(Elf_Half e_machine) {
         case EM_RISCV:
             return IMAGE_FILE_MACHINE_RISCV;
         default:
-            err(ERR_UNSUP, "Unsupport machine type ({}).\n", e_machine);
+            err(ERR_UNSUP, "Unsupport machine type ({}).", e_machine);
     }
 }
 
@@ -70,7 +69,7 @@ relocation_table(const DataIter &data, auto offset, auto base) {
             case DT_RELAENT:
                 err(ERR_UNSUP,
                     "Unsupport relocation type {}, (use link arg `-z pack-relative-relocs` "
-                    "instead).\n",
+                    "instead).",
                     dyn->d_tag);
             case DT_RELR:
                 relr.push_back(dyn->d_un.d_ptr);
@@ -83,7 +82,7 @@ relocation_table(const DataIter &data, auto offset, auto base) {
                 break;
             case DT_FLAGS_1:
                 if (!(dyn->d_un.d_val & DF_1_PIE)) {
-                    err(ERR_UNSUP, "ELF file is not Position-Independent-Executable.\n");
+                    err(ERR_UNSUP, "ELF file is not Position-Independent-Executable.");
                 }
                 _is_pie = true;
             default:
@@ -91,11 +90,11 @@ relocation_table(const DataIter &data, auto offset, auto base) {
         }
     }
     if (!_is_pie) {
-        err(ERR_UNSUP, "ELF file is not Position-Independent-Executable.\n");
+        err(ERR_UNSUP, "ELF file is not Position-Independent-Executable.");
     }
     if (relr.size() != relrsz.size() || relr.size() != relrent.size()) {
         err(ERR_INPUT,
-            "The number of ELF DT_RELR({}), DT_RELRSZ({}), DT_RELRENT({}) not match.\n",
+            "The number of ELF DT_RELR({}), DT_RELRSZ({}), DT_RELRENT({}) not match.",
             relr.size(),
             relrsz.size(),
             relrent.size());
@@ -110,7 +109,7 @@ relocation_table(const DataIter &data, auto offset, auto base) {
         for (Elf_Addr next = 0; auto entry : entries) {
             if (*entry & 1) {
                 if (next == 0) {
-                    err(ERR_INPUT, "Invalid ELF relative relocation.\n");
+                    err(ERR_INPUT, "Invalid ELF relative relocation.");
                 }
                 for (int i = 1; i < ARCH_CLASS; ++i, next += sizeof(Elf_Addr)) {
                     if ((*entry >> i) & 1) {
@@ -146,30 +145,30 @@ static void elf2efi(const config &cfg, DataIter &&data) {
 
     if (ehdr->e_ident[EI_MAG0] != ELFMAG0 || ehdr->e_ident[EI_MAG1] != ELFMAG1 ||
         ehdr->e_ident[EI_MAG2] != ELFMAG2 || ehdr->e_ident[EI_MAG3] != ELFMAG3) { // never
-        err(ERR_INPUT, "Invalid ELF file.\n");
+        err(ERR_INPUT, "Invalid ELF file.");
     }
 
     if (ehdr->e_ident[EI_CLASS] != ELFCLASS) { // never
-        err(ERR_INPUT, "ELF class is not {}.\n", ARCH_CLASS);
+        err(ERR_INPUT, "ELF class is not {}.", ARCH_CLASS);
     }
 
     // check e_shoff
     if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0) {
-        err(ERR_UNSUP, "ELF file has no section header table.\n");
+        err(ERR_UNSUP, "ELF file has no section header table.");
     }
 
     // check e_phoff
     if (ehdr->e_phoff == 0 || ehdr->e_phnum == 0) {
-        err(ERR_UNSUP, "ELF file has no program header table.\n");
+        err(ERR_UNSUP, "ELF file has no program header table.");
     }
 
     // check data encoding
     if (ehdr->e_ident[EI_DATA] != ELFDATA2LSB) {
-        err(ERR_UNSUP, "ELF data encoding is not little-endian.\n");
+        err(ERR_UNSUP, "ELF data encoding is not little-endian.");
     }
     // check e_type
     if (ehdr->e_type != ET_DYN) {
-        err(ERR_UNSUP, "ELF type:{} is not Position-Independent-Executable.\n", ehdr->e_type);
+        err(ERR_UNSUP, "ELF type:{} is not Position-Independent-Executable.", ehdr->e_type);
     }
 
     auto phtable(
@@ -184,18 +183,16 @@ static void elf2efi(const config &cfg, DataIter &&data) {
     // load PT_LOAD into pe sections
     for (auto phdr : phtable) {
         if (phdr->p_type == PT_INTERP) {
-            err(ERR_UNSUP, "ELF file is not static linked.\n");
+            err(ERR_UNSUP, "ELF file is not static linked.");
         }
         if (phdr->p_type != PT_LOAD) continue;
         if (phdr->p_align != SECTION_ALIGNMENT) {
-            err(ERR_UNSUP,
-                "ELF segment PT_LOAD is not properly aligned ({}).\n",
-                phdr->p_align);
+            err(ERR_UNSUP, "ELF segment PT_LOAD is not properly aligned ({}).", phdr->p_align);
         }
         load_phdrs.push_back(phdr);
     }
     if (load_phdrs.empty()) {
-        err(ERR_UNSUP, "ELF file has no segment load into mem.\n");
+        err(ERR_UNSUP, "ELF file has no segment load into mem.");
     }
 
     // PE relro feature
@@ -228,11 +225,11 @@ static void elf2efi(const config &cfg, DataIter &&data) {
         relocs.insert(relocs.end(), _.begin(), _.end());
     }
     if (!has_dynamic) {
-        err(ERR_UNSUP, "ELF file has no dynamic segment.\n");
+        err(ERR_UNSUP, "ELF file has no dynamic segment.");
     }
-    std::ofstream pe(cfg.outfile, ios::binary | ios::out);
+    std::ofstream pe(cfg.outFile, ios::binary | ios::out);
     if (!pe) {
-        err(ERR_SYS, "Failed to open PE file.\n");
+        err(ERR_SYS, "Failed to open PE file.");
     }
 
     vector<EFI_IMAGE_SECTION_HEADER> sections;
@@ -244,13 +241,13 @@ static void elf2efi(const config &cfg, DataIter &&data) {
         auto n_vaddr = ALIGN_DOWN(phdr->p_vaddr, SECTION_ALIGNMENT);
         if (lastvma > n_vaddr + segment_offset) {
             err(ERR_UNSUP | ERR_INPUT, // occurs mostly the elf file invalid
-                "ELF PT_LOAD segments overlaps ({:x} overlaps the next {:x}).\n",
+                "ELF PT_LOAD segments overlaps ({:x} overlaps the next {:x}).",
                 lastvma,
                 n_vaddr + segment_offset);
         }
         if (phdr->p_filesz != 0 && !pe.seekp(section_offset + phdr->p_vaddr - n_vaddr, ios::beg)
                                         .write(data + phdr->p_offset, phdr->p_filesz)) {
-            err(ERR_SYS, "Failed to write to PE section at {:x}.\n", section_offset);
+            err(ERR_SYS, "Failed to write to PE section at {:x}.", section_offset);
         }
         uint32_t n_size =
             phdr->p_filesz == 0
@@ -283,7 +280,7 @@ static void elf2efi(const config &cfg, DataIter &&data) {
                 if (!base_of_data) base_of_data = section.VirtualAddress;
                 break;
             default:
-                err(ERR_UNSUP, "Unsupport program segment flags ({:x}).\n", phdr->p_flags);
+                err(ERR_UNSUP, "Unsupport program segment flags ({:x}).", phdr->p_flags);
         }
         lastvma = ALIGN_TO(phdr->p_vaddr + phdr->p_memsz + segment_offset, SECTION_ALIGNMENT);
         section_offset += n_size;
@@ -312,7 +309,7 @@ static void elf2efi(const config &cfg, DataIter &&data) {
             if (!pe.seekp(section_offset, ios::beg)
                      .write(TOCHARS(&block.header), sizeof(EFI_IMAGE_BASE_RELOCATION))
                      .write(TOCHARS(block.entries.data()), block.entries.size() * 2)) {
-                err(ERR_SYS, "Failed to write to PE .reloc section at {:x}.\n", section_offset);
+                err(ERR_SYS, "Failed to write to PE .reloc section at {:x}.", section_offset);
             }
             section_offset += block.header.SizeOfBlock;
         }
@@ -331,7 +328,7 @@ static void elf2efi(const config &cfg, DataIter &&data) {
         sections.emplace_back(std::move(section));
     }
 
-    log("PE file total size {} of bytes\n", section_offset);
+    log("PE file total size {} of bytes", section_offset);
 
     EFI_IMAGE_DOS_HEADER doshdr = {
         .e_magic = EFI_IMAGE_DOS_SIGNATURE,
@@ -342,7 +339,7 @@ static void elf2efi(const config &cfg, DataIter &&data) {
         .FileHeader{
             .Machine = pe_machine(ehdr->e_machine),
             .NumberOfSections = static_cast<uint16_t>(sections.size()),
-            .TimeDateStamp = static_cast<uint32_t>(time(NULL)),
+            .TimeDateStamp = static_cast<uint32_t>(time(nullptr)),
             .SizeOfOptionalHeader = sizeof(EFI_IMAGE_OPTIONAL_HEADER),
             .Characteristics = IMAGE_FILE_CHARACTERISTICS,
         },
@@ -371,12 +368,12 @@ static void elf2efi(const config &cfg, DataIter &&data) {
              .write(TOCHARS(&nthdr), sizeof(EFI_IMAGE_NT_HEADER))
              .write(TOCHARS(sections.data()),
                     sizeof(EFI_IMAGE_SECTION_HEADER) * sections.size())) {
-        err(ERR_SYS, "Failed to write to PE headers.\n");
+        err(ERR_SYS, "Failed to write to PE headers.");
     }
     try {
-        stdfs::resize_file(cfg.outfile, section_offset);
+        stdfs::resize_file(cfg.outFile, section_offset);
     } catch (stdfs::filesystem_error &ec) {
         err(ERR_SYS, "Failed to resize PE file to alignment: {}", ec.what());
     }
-    log("Finished.\n");
+    log("Finished.");
 }

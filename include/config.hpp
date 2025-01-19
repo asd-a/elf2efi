@@ -45,9 +45,8 @@ static_assert(alignof(std::int64_t) == 8, "alignof(std::int64_t) != 8");
 static_assert(alignof(std::uint64_t) == 8, "alignof(std::uint64_t) != 8");
 
 struct config {
-    std::string infile, outfile; //, copy;
+    std::string inFile, outFile; //, copy;
     std::uint16_t subsystem;
-    // std::size_t minimum_sections;
 };
 #define SECTION_ALIGNMENT 0x1000 // 4096
 #define FILE_ALIGNMENT 0x0200    // 512
@@ -77,19 +76,19 @@ struct config {
 
 template <typename... Args>
 static inline void log(std::format_string<Args...> fmt, Args &&...args) {
-    std::clog << std::vformat(fmt.get(), std::make_format_args(args...));
+    std::clog <<"LOG: "<< std::vformat(fmt.get(), std::make_format_args(args...)) << std::endl;
 }
 
 template <typename... Args>
 [[noreturn]] static inline void
 err(auto exit_code, std::format_string<Args...> fmt, Args &&...args) {
-    std::cerr << std::vformat(fmt.get(), std::make_format_args(args...));
+    std::cerr <<"ERROR: " <<std::vformat(fmt.get(), std::make_format_args(args...)) << std::endl;
     exit(exit_code);
 }
 
 template <typename... Args>
 static inline void print(std::format_string<Args...> fmt, Args &&...args) {
-    std::cout << std::vformat(fmt.get(), std::make_format_args(args...));
+    std::cout << std::vformat(fmt.get(), std::make_format_args(args...)) << std::endl;
 }
 
 using std::exit;
