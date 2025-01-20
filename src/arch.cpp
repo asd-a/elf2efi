@@ -53,7 +53,7 @@ table_with_num(const DataIter &data, auto offset, auto entsize, auto num) {
         x = base;
         base += entsize;
     }
-    return std::move(_);
+    return _;
 }
 static inline std::vector<Elf_Addr>
 relocation_table(const DataIter &data, auto offset, auto base) {
@@ -139,6 +139,11 @@ struct PeRelocationBlock {
 };
 
 static void elf2efi(const config &cfg, DataIter &&data) {
+#if ARCH_CLASS == 32
+    if(cfg.base >> 32){
+        err(ERR_CMD, "Image base:{:x} is too large.", cfg.base);
+    }
+#endif
     using std::vector, std::string, std::pair, std::ios, std::uint32_t, std::uint16_t;
     namespace stdfs = std::filesystem;
     Elf_Ehdr *ehdr = data;
@@ -221,7 +226,7 @@ static void elf2efi(const config &cfg, DataIter &&data) {
     for (auto phdr : phtable) {
         if (phdr->p_type != PT_DYNAMIC) continue;
         has_dynamic = true;
-        auto _ = relocation_table(data, phdr->p_offset, IMAGE_BASE + segment_offset);
+        auto _ = relocation_table(data, phdr->p_offset, cfg.base + segment_offset);
         relocs.insert(relocs.end(), _.begin(), _.end());
     }
     if (!has_dynamic) {
@@ -351,8 +356,10 @@ static void elf2efi(const config &cfg, DataIter &&data) {
             .BaseOfCode = base_of_code,
 #if ARCH_CLASS == 32
             .BaseOfData = base_of_data,
+            .ImageBase = static_cast<uint32_t>(cfg.base),
+#else
+            .ImageBase = cfg.base,
 #endif
-            .ImageBase = IMAGE_BASE,
             .SectionAlignment = SECTION_ALIGNMENT,
             .FileAlignment = FILE_ALIGNMENT,
             .MajorSubsystemVersion = cfg.subsystemMajor,

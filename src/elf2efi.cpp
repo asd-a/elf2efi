@@ -35,7 +35,8 @@ struct ArgOptions {
         const char *description;
         const char *addons;
         inline bool check(const char *argv) const {
-            if (short_name != 0 && argv[0] == '-' && argv[1] == short_name && argv[2] == '\0')
+            if (std::isprint(short_name) && argv[0] == '-' && argv[1] == short_name &&
+                argv[2] == '\0')
                 return true;
             return argv[0] == '-' && argv[1] == '-' && std::strcmp(long_name, argv + 2) == 0;
         }
@@ -58,7 +59,7 @@ struct ArgOptions {
             description);
         for (const auto &opt : opts) {
             std::string _ = "    ";
-            if (opt.short_name != 0) {
+            if (std::isprint(opt.short_name)) {
                 _ = std::format("-{}, ", opt.short_name);
             }
             _ = std::format("  {}--{} {}", _, opt.long_name, opt.addons);
@@ -103,6 +104,7 @@ static inline config parse_args(int argc, char *const argv[]) {
         .stackCommit = 0x1000,
         .heapReserve = 0x100000,
         .heapCommit = 0x1000,
+        .base = 0,
     };
     auto ind = 1;
     using std::string, std::vector;
@@ -136,8 +138,8 @@ static inline config parse_args(int argc, char *const argv[]) {
         {
             0,
             "subsystem",
-            "Specify the image subsystem (and version)",
-            "<SUBSYSTEM_ID>[:<MAJOR>.<MINOR>]",
+            "Specify the image subsystem (and the minimum version)",
+            "<ID>[:<MAJOR>.<MINOR>]",
             [&]() -> OPTSTR {
                 if (auto ptr = std::strchr(argv[++ind], ':')) {
                     auto _ = std::strchr(ptr, '.');
@@ -182,6 +184,13 @@ static inline config parse_args(int argc, char *const argv[]) {
                     return format_int(argv[ind], cfg.heapReserve) ? argv[ind] : NULLOPT;
                 }
             },
+        },
+        {
+            0,
+            "base",
+            "Specify the image base",
+            "<VALUE>",
+            [&]() -> OPTSTR { return format_int(argv[ind], cfg.base) ? argv[ind] : NULLOPT; },
         },
     };
     for (; ind < argc; ++ind) {
